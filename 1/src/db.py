@@ -10,6 +10,15 @@ from logger import logger
 async def setup_asyncpg_pool(
     has_pgbouncer: bool = False,
 ) -> asyncpg.Pool:
+    """Создаёт пул подключений к базе данных PostgreSQL с помощью asyncpg.
+
+    Args:
+        has_pgbouncer (bool, optional): Флаг наличия PgBouncer.
+            Если True, отключаются Prepared Statements. По умолчанию False.
+
+    Returns:
+        asyncpg.Pool: Пул подключений к базе данных.
+    """
     logger.info("Создаю пул подключений к БД asyncpg")
     pgbouncer_setup = {}
     if has_pgbouncer:
@@ -42,6 +51,14 @@ async def setup_asyncpg_pool(
 async def get_pg_connection(
     request: Request,
 ) -> AsyncGenerator[asyncpg.Connection, None]:
+    """Асинхронный генератор для получения подключения к базе данных из пула.
+
+    Args:
+        request (Request): Объект запроса FastAPI, содержащий пул подключений.
+
+    Yields:
+        asyncpg.Connection: Подключение к базе данных.
+    """
     logger.debug("Получаю подключение к БД из пула")
     pool: asyncpg.Pool = request.app.state.db_pool
     async with pool.acquire() as conn:
