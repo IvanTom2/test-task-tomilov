@@ -11,8 +11,8 @@ from fastapi import HTTPException
 from settings import settings
 from logger import logger
 
-from db import setup_asyncpg_pool
-from db import get_pg_connection
+from src.db import setup_asyncpg_pool
+from src.db import get_pg_connection
 
 
 DB_VERSION_FAIL_MESSAGE = "Не удалось получить версию БД"
