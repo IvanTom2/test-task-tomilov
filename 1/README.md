@@ -26,7 +26,7 @@
     uv sync
     ```
 
-    # Или через Python
+    #### Или через Python
     ```bash
     python3 -m venv .venv
     python3 -m pip install .
@@ -38,7 +38,7 @@
     uv run uvicorn main:create_app --factory
     ```
 
-    # Или через обычный Python
+    #### Или через обычный Python
     ```bash
     source .venv/bin/activate
     python3 -m uvicorn main:create_app --factory
