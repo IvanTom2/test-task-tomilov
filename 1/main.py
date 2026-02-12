@@ -21,6 +21,17 @@ DB_VERSION_FAIL_MESSAGE = "Не удалось получить версию Б�
 async def get_db_version(
     conn: Annotated[asyncpg.Connection, Depends(get_pg_connection)],
 ):
+    """Эндпоинт для получения версии базы данных PostgreSQL.
+
+    Args:
+        conn (asyncpg.Connection): Подключение к базе данных.
+
+    Returns:
+        str: Строка с версией PostgreSQL.
+
+    Raises:
+        HTTPException: В случае ошибки при выполнении запроса.
+    """
     try:
         logger.debug("Выполняю запрос на получение версии БД")
         return await conn.fetchval("SELECT version()", timeout=5)
@@ -34,6 +45,13 @@ async def get_db_version(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Жизненный цикл приложения.
+
+    - Инициализирует и закрывает пул подключений к базе данных.
+
+    Args:
+        app (FastAPI): Экземпляр FastAPI.
+    """
     logger.info("Инициализация ресурсов")
 
     try:
@@ -55,6 +73,11 @@ async def lifespan(app: FastAPI):
 
 
 def register_routes(app: FastAPI):
+    """Регистрирует маршруты API в приложении FastAPI.
+
+    Args:
+        app (FastAPI): Экземпляр FastAPI.
+    """
     logger.info("Регистрирую маршруты")
     router = APIRouter(prefix="/api")
     router.add_api_route(
@@ -75,6 +98,11 @@ def register_routes(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    """Создаёт и настраивает экземпляр FastAPI приложения.
+
+    Returns:
+        FastAPI: Экземпляр приложения FastAPI.
+    """
     logger.info("Создаю FastAPI приложение")
     app = FastAPI(
         title="e-Comet",
