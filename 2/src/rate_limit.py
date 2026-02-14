@@ -2,6 +2,7 @@ import time
 import asyncio
 from logging import Logger
 from collections import deque
+from typing import Deque
 
 from src.scraper import RateLimit
 from src.scraper import IRateLimiter
@@ -51,7 +52,7 @@ class SlidingWindowDequeRateLimiter(BaseRateLimiter):
             self._sem = None
         else:
             self._sem = asyncio.Semaphore(limit.max_concurrent)
-        self._q = deque()
+        self._q: Deque[float] = deque()
 
         if timeout_adjustment == 0:
             timeout_adjustment = None
