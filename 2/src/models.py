@@ -1,15 +1,7 @@
-import asyncio
-from abc import ABC
-from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Final, Any
-from logging import Logger
+from typing import Any
 
-from aiohttp import ClientSession
-from aiohttp import ClientTimeout
 
-from logger import logger
-from settings import settings
 
 
 @dataclass

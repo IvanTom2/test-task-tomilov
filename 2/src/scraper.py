@@ -1,24 +1,19 @@
-import time
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import contextvars
 from dataclasses import dataclass
 
 from abc import ABC
 from abc import abstractmethod
-from dataclasses import dataclass
 import json
 from typing import Final, Any
 from logging import Logger
-from collections import OrderedDict
 
 from aiohttp import ClientSession
 from aiohttp import ClientTimeout
 from aiohttp import ClientResponse
 
-from logger import logger
 from settings import timezone as tz
-from settings import settings
 from src.models import Repository
 from src.models import RepositoryAuthorCommitsNum
 
@@ -277,7 +272,7 @@ class GithubReposScrapper(IGithubReposScrapper):
         except RetryFailedError as ex:
             self._logger.error(f"Не удалось получить топ-{limit} репозиториев: {ex}")
             return []
-        if not "items" in data:
+        if "items" not in data:
             return []
         return [Repository.from_api(x, pos) for pos, x in enumerate(data["items"])]
 

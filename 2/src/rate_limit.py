@@ -102,12 +102,12 @@ class SlidingWindowDequeRateLimiterUnion(IRateLimiter):
         self._limiters = limiters
 
     async def acquire(self) -> None:
-        for l in self._limiters:
-            await l.acquire()
+        for limiter in self._limiters:
+            await limiter.acquire()
 
     async def release(self) -> None:
-        for l in reversed(self._limiters):
-            await l.release()
+        for limiter in reversed(self._limiters):
+            await limiter.release()
 
     async def __aenter__(self):
         await self.acquire()

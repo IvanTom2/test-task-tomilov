@@ -9,10 +9,8 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from logger import logger
 from src.scraper import REQUEST_ID
 from src.rate_limit import IRateLimiter
-from src.rate_limit import SlidingWindowDequeRateLimiter
 
 
 RequestInHistory = namedtuple("RequestInHistory", ["id", "timestamp", "state"])
