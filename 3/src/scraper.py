@@ -15,6 +15,7 @@ from aiohttp import ClientTimeout
 from aiohttp import ClientResponse
 
 from settings import timezone as tz
+from src.use_case import IGithubReposScrapper
 from src.models import Repository
 from src.models import RepositoryAuthorCommitsNum
 
@@ -79,20 +80,6 @@ class IRateLimiter(ABC):
 class IRateLimiterResourceExtended(ABC):
     @abstractmethod
     def __call__(self, resource: str) -> IRateLimiter:
-        pass
-
-
-class IGithubReposScrapper(ABC):
-    @abstractmethod
-    async def get_repositories(
-        self,
-        qty: int = 100,
-        limit: int = 100,
-    ) -> list[Repository]:
-        pass
-
-    @abstractmethod
-    async def close(self) -> None:
         pass
 
 
