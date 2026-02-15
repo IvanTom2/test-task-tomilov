@@ -1,3 +1,4 @@
+import math
 import asyncio
 from datetime import datetime, timezone
 import contextvars
@@ -83,7 +84,11 @@ class IRateLimiterResourceExtended(ABC):
 
 class IGithubReposScrapper(ABC):
     @abstractmethod
-    async def get_repositories(self, limit: int = 100) -> list[Repository]:
+    async def get_repositories(
+        self,
+        qty: int = 100,
+        limit: int = 100,
+    ) -> list[Repository]:
         pass
 
     @abstractmethod
@@ -173,12 +178,13 @@ class GithubReposScrapper(IGithubReposScrapper):
     async def _make_request(
         self,
         endpoint: str,
+        resource: str,
         method: str = "GET",
         params: dict[str, Any] | None = None,
         cached: bool = False,
     ) -> Any:
         REQUEST_ID.set(self._get_request_id())
-        self._logger.debug(f"Выполняю запрос {method} {endpoint} с параметрами")
+        self._logger.debug(f"Выполняю запрос {method} {endpoint}")
         URL = f"{GITHUB_API_BASE_URL}/{endpoint}"
         cache_key = f"{method}:{endpoint}:{json.dumps(params, sort_keys=True)}"
         if cached and self._cache is not None:
@@ -187,16 +193,17 @@ class GithubReposScrapper(IGithubReposScrapper):
                 self._logger.debug(f"Использую кэш для запроса {cache_key}")
                 return cached_data
 
-        async with self._session.request(
-            method,
-            URL,
-            params=params,
-        ) as response:
-            data = await self._validate_response(response)
-            if cached and self._cache is not None:
-                self._logger.debug(f"Кэширую ответ для запроса {cache_key}")
-                await self._cache.set(cache_key, data, ttl=60 * 15)
-            return data
+        async with self._rate_limit(resource):
+            async with self._session.request(
+                method,
+                URL,
+                params=params,
+            ) as response:
+                data = await self._validate_response(response)
+                if cached and self._cache is not None:
+                    self._logger.debug(f"Кэширую ответ для запроса {cache_key}")
+                    await self._cache.set(cache_key, data, ttl=60 * 15)
+                return data
 
     async def _make_request_retry(
         self,
@@ -204,23 +211,33 @@ class GithubReposScrapper(IGithubReposScrapper):
         resource: str,
         method: str = "GET",
         params: dict[str, Any] | None = None,
-        max_retries: int = 3,
+        max_retries: int | None = None,
+        wait_reset_sec_max: int = 10,
     ) -> Any:
+        if max_retries is None:
+            max_retries = self._max_retries
         for retry in range(max_retries):
             try:
-                async with self._rate_limit(resource):
-                    return await self._make_request(
-                        endpoint=endpoint,
-                        method=method,
-                        params=params,
-                    )
+                return await self._make_request(
+                    endpoint=endpoint,
+                    resource=resource,
+                    method=method,
+                    params=params,
+                )
 
             except GitHubAPIRateLimitError as ex:
+                if retry == max_retries - 1:
+                    raise RetryFailedError from ex
+
+                ridv = REQUEST_ID.get()
+                rid = f" для запроса {ridv}" if ridv else ""
                 reset_time = ex.reset_time
+                if reset_time is not None and reset_time > wait_reset_sec_max:
+                    raise RetryFailedError from ex
                 if reset_time:
                     ws = reset_time - int(datetime.now(tz=timezone.utc).timestamp()) + 1
                     if ws > 0:
-                        self._logger.warning(f"Превышен лимит. Ожидаю {ws} сек.")
+                        self._logger.warning(f"Превышен лимит{rid}. Ожидаю {ws} сек.")
                         await asyncio.sleep(ws)
                         continue
 
@@ -244,18 +261,29 @@ class GithubReposScrapper(IGithubReposScrapper):
                 self._logger.error(f"Ошибка при получении репозиториев: {ex}")
                 raise RetryFailedError from ex
 
+        return None
+
     async def _get_top_repositories(
         self,
         limit: int = 100,
+        page: int = 1,
         max_retries: int | None = None,
     ) -> list[Repository]:
         """
         GitHub REST API: https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories
         """
+        if limit < 0:
+            raise ValueError("limit должен быть положительным числом")
+        if limit > 100:
+            self._logger.warning(
+                "limit не может быть больше 100, будет установлен в 100"
+            )
+
+        limit = max(1, min(limit, 100))
         if max_retries is None:
             max_retries = self._max_retries
 
-        self._logger.info(f"Получаю топ-{limit} репозиториев")
+        self._logger.info(f"Получаю топ-{limit} репозиториев страница {page}")
         try:
             data = await self._make_request_retry(
                 endpoint="search/repositories",
@@ -265,9 +293,11 @@ class GithubReposScrapper(IGithubReposScrapper):
                     "q": "stars:>1",
                     "sort": "stars",
                     "order": "desc",
+                    "page": page,
                     "per_page": limit,
                 },
                 max_retries=3,
+                wait_reset_sec_max=5,
             )
         except RetryFailedError as ex:
             self._logger.error(f"Не удалось получить топ-{limit} репозиториев: {ex}")
@@ -322,6 +352,7 @@ class GithubReposScrapper(IGithubReposScrapper):
                     "since": since,
                 },
                 max_retries=max_retries,
+                wait_reset_sec_max=5,
             )
             return data
         except RetryFailedError as ex:
@@ -372,10 +403,75 @@ class GithubReposScrapper(IGithubReposScrapper):
                 break
         return self._commits_to_models(owner, repo, items)
 
-    async def get_repositories(self, limit: int = 100) -> list[Repository]:
-        self._logger.info(f"Получаю топ-{limit} репозиториев на GitHub")
-        repositories = await self._get_top_repositories(limit=limit)
+    async def _get_all_repositories(
+        self,
+        qty: int = 100,
+        limit: int = 100,
+    ) -> list[Repository]:
+        if limit < 0:
+            raise ValueError("limit должен быть положительным числом")
+        if qty <= 0:
+            raise ValueError("qty должен быть положительным числом")
+        if qty > 1000:
+            self._logger.warning(
+                "qty не может быть больше 1000, будет установлен в 1000"
+            )
+            qty = 1000
+        if limit > 100:
+            self._logger.warning(
+                "limit не может быть больше 100, будет установлен в 100"
+            )
+
+        limit = max(1, min(limit, 100))
+        qty = max(1, min(qty, 1000))
+
+        self._logger.info(f"Получаю топ-{qty} репозиториев на GitHub")
+        pages = math.ceil(qty / limit)
+        tasks = [
+            self._get_top_repositories(
+                limit=min(limit, qty - page * limit),
+                page=page + 1,
+            )
+            for page in range(pages)
+        ]
+        repositories: list[Repository] = []
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for page, res in enumerate(results):
+            page_limit = min(limit, qty - page * limit)
+            start = page * limit
+            end = start + page_limit
+            if isinstance(res, BaseException):
+                self._logger.error(
+                    f"Ошибка при получении репозиториев {start}-{end}: {res}"
+                )
+                continue
+            repositories.extend(res)
+
         self._logger.info(f"Получено {len(repositories)} репозиториев")
+        return repositories
+
+    async def get_repositories(
+        self,
+        qty: int = 100,
+        limit: int = 100,
+    ) -> list[Repository]:
+        if limit < 0:
+            raise ValueError("limit должен быть положительным числом")
+        if qty <= 0:
+            raise ValueError("qty должен быть положительным числом")
+        if qty > 1000:
+            self._logger.warning(
+                "qty не может быть больше 1000, будет установлен в 1000"
+            )
+        if limit > 100:
+            self._logger.warning(
+                "limit не может быть больше 100, будет установлен в 100"
+            )
+
+        limit = max(1, min(limit, 100))
+        qty = max(1, min(qty, 1000))
+
+        repositories = await self._get_all_repositories(qty=qty, limit=limit)
 
         self._logger.info("Формирую список задач для получения коммитов репозиториев")
         tasks = [self._get_repository_commits(r.owner, r.name) for r in repositories]
