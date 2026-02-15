@@ -38,9 +38,14 @@ async def main():
             timeout=15,
             cache=cache,
         )
-        repositories = await scrapper.get_repositories(limit=5)
+        repositories = await scrapper.get_repositories(qty=1000, limit=100)
+        uniq = set()
         for repo in repositories:
-            print(repo)
+            # print(repo)
+            uniq.add((repo.owner, repo.name))
+
+        print(f"Всего репозиториев получено: {len(repositories)}")
+        print(f"Уникальных репозиториев: {len(uniq)}")
 
     finally:
         await scrapper.close()

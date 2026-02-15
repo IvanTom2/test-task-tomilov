@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from typing import Any
 
 
-
-
 @dataclass
 class RepositoryAuthorCommitsNum:
     author: str

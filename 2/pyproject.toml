@@ -17,3 +17,5 @@ dev = [
     "mypy>=1.19.1",
     "ruff>=0.15.1",
 ]
+[mypy]
+explicit_package_bases = true
