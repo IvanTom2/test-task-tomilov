@@ -1,0 +1,35 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    env_file:
+      - .env
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+
+  init:
+    image: clickhouse/clickhouse-server:latest
+    depends_on:
+      - clickhouse
+    env_file:
+      - .env
+    volumes:
+      - ./tables.sql:/tables.sql
+    command: >
+      sh -c "
+        sleep 10 &&
+        if [ -f /tables.sql ]; then
+          echo 'Файл tables.sql найден' &&
+          clickhouse-client --host clickhouse --user $$CLICKHOUSE_USER --password $$CLICKHOUSE_PASSWORD --multiquery < /tables.sql &&
+          echo 'Таблицы инициализированы'
+        else
+          echo 'Файл tables.sql не найден' &&
+          ls -la /tables.sql
+        fi
+      "
+    restart: "no"
+
+volumes:
+  clickhouse_data:
