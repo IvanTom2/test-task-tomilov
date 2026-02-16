@@ -10,7 +10,7 @@
 
     ```bash
     git clone <repo>
-    cd test-task-tomilov/3
+    cd test-task-tomilov/4
     ```
 
 2. **Запустите ClickHouse и подготовьте таблицы: вариант через docker**

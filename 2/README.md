@@ -16,7 +16,7 @@
 2. **Создайте файл `.env` на основе примера `example.env` и заполните необходимые переменные окружения:**
 
     ```bash
-    cp .env.example .env
+    cp example.env .env
     # Отредактируйте .env - заполните его данными подключения к GitHub
     ```
 
@@ -47,13 +47,13 @@
 5. **Запустите проект:**
 
     ```bash
-    uv run uvicorn main:create_app --factory
+    uv run main.py
     ```
 
     #### Или через обычный Python
     ```bash
     source .venv/bin/activate
-    python3 -m uvicorn main:create_app --factory
+    python3 -m main
     ```
 
 ## Примечания
